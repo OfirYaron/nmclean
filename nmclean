@@ -2,7 +2,7 @@
 # nmclean - find node_modules folders and delete them all at once or one by one.
 # https://github.com/OfirYaron/nmclean
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 usage() {
     cat <<EOF
@@ -14,11 +14,18 @@ Searches dir (default: \$NMCLEAN_ROOT, or the current directory) for
 node_modules folders, lists them with sizes, then lets you delete them
 all at once or decide one by one. Nested node_modules are skipped.
 
+Hidden directories (names starting with ".", e.g. ~/.npm-global, ~/.nvm,
+~/.cursor, ~/.vscode) are not searched, so running from ~ cannot remove
+global tools or editor extensions. The dir you pass is always searched,
+even if it is hidden itself. npm's global node_modules (from
+"npm prefix -g") is always skipped, even with --include-hidden.
+
 Options:
-  -n, --dry-run   List folders and sizes only, delete nothing
-  -y, --yes       Delete all found folders without asking
-  -h, --help      Show this help
-  -v, --version   Show version
+  -n, --dry-run         List folders and sizes only, delete nothing
+  -y, --yes             Delete all found folders without asking
+      --include-hidden  Also search inside hidden directories
+  -h, --help            Show this help
+  -v, --version         Show version
 
 Environment:
   NMCLEAN_ROOT    Default directory to search when none is given
@@ -27,12 +34,14 @@ EOF
 
 dry_run=0
 assume_yes=0
+include_hidden=0
 root=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         -n|--dry-run) dry_run=1 ;;
         -y|--yes) assume_yes=1 ;;
+        --include-hidden) include_hidden=1 ;;
         -h|--help) usage; exit 0 ;;
         -v|--version) echo "nmclean $VERSION"; exit 0 ;;
         -*) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -73,11 +82,47 @@ ask() {
 
 echo "Searching for node_modules in $root ..."
 
-# -prune stops find from descending into node_modules, so nested ones are skipped
+# Physical path of a directory (symlinks resolved), or nothing if it can't be entered
+physical() {
+    (cd "$1" 2>/dev/null && pwd -P)
+}
+
+# -prune on node_modules stops find from descending into it, so nested ones are skipped.
+# Hidden directories are pruned too unless --include-hidden is given. -mindepth 1 keeps
+# the root itself exempt, so an explicitly requested hidden dir (or ".") is still searched.
+find_args=(-mindepth 1)
+if [ "$include_hidden" -eq 0 ]; then
+    find_args+=(\( -type d -name '.*' -prune \) -o)
+fi
+find_args+=(\( -type d -name node_modules -prune -print \))
+
+found=()
+if [ "$(basename "$root")" = "node_modules" ]; then
+    # The root is itself a node_modules folder: it is the only candidate
+    found=("$root")
+else
+    while IFS= read -r d; do
+        found+=("$d")
+    done < <(find "$root" "${find_args[@]}" 2>/dev/null)
+fi
+
+# Never touch npm's global packages (npm itself and every global CLI), wherever they live
+npm_global=""
+if [ ${#found[@]} -gt 0 ] && command -v npm >/dev/null 2>&1; then
+    npm_prefix=$(npm prefix -g 2>/dev/null)
+    if [ -n "$npm_prefix" ] && [ -d "$npm_prefix/lib/node_modules" ]; then
+        npm_global=$(physical "$npm_prefix/lib/node_modules")
+    fi
+fi
+
 dirs=()
-while IFS= read -r d; do
+for d in "${found[@]}"; do
+    if [ -n "$npm_global" ] && [ "$(physical "$d")" = "$npm_global" ]; then
+        echo "Skipping npm global packages: $d"
+        continue
+    fi
     dirs+=("$d")
-done < <(find "$root" -type d -name node_modules -prune -print 2>/dev/null)
+done
 
 if [ ${#dirs[@]} -eq 0 ]; then
     echo "No node_modules folders found."

@@ -59,6 +59,7 @@ nmclean [options] [dir]
 | `dir` | Folder to search. Defaults to `$NMCLEAN_ROOT`, or the current directory. |
 | `-n`, `--dry-run` | List folders and sizes only; delete nothing. |
 | `-y`, `--yes` | Delete everything found without asking. |
+| `--include-hidden` | Also search inside hidden directories (see [Safety](#safety)). |
 | `-h`, `--help` | Show help. |
 | `-v`, `--version` | Show version. |
 
@@ -80,8 +81,20 @@ export NMCLEAN_ROOT="$HOME/projects"
 
 - Only folders named exactly `node_modules` are ever deleted.
 - Nested `node_modules` (inside another `node_modules`) are skipped, so each project appears once.
+- Hidden directories (any name starting with `.`) are not searched. That keeps things like `~/.npm-global`, `~/.nvm`, `~/.local`, `~/.cursor/extensions` and `~/.vscode/extensions` safe when you run `nmclean` from your home folder. Pass `--include-hidden` to search them too.
+- The folder you pass is always searched, even if it is hidden itself, so `nmclean ~/.cursor/extensions` does what it says.
+- npm's global packages (`$(npm prefix -g)/lib/node_modules`, i.e. npm itself and every global CLI) are always skipped, even with `--include-hidden`. This check only runs when `npm` is on your `PATH`.
 - "Delete all" asks for confirmation unless you pass `-y`.
 - Deleted folders do not go to the Trash. Run `npm install` (or your package manager) to bring them back.
+
+## Tests
+
+The tests are a plain bash script that builds a throwaway folder tree under `$TMPDIR` and runs `nmclean` against it only:
+
+```sh
+./test/run.sh
+TEST_BASH=/bin/bash ./test/run.sh   # macOS's built-in bash 3.2
+```
 
 ## Uninstall
 
