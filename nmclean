@@ -17,8 +17,9 @@ all at once or decide one by one. Nested node_modules are skipped.
 Hidden directories (names starting with ".", e.g. ~/.npm-global, ~/.nvm,
 ~/.cursor, ~/.vscode) are not searched, so running from ~ cannot remove
 global tools or editor extensions. The dir you pass is always searched,
-even if it is hidden itself. npm's global node_modules (from
-"npm prefix -g") is always skipped, even with --include-hidden.
+even if it is hidden itself. When npm is on PATH, npm's global
+node_modules folder (from "npm prefix -g") is always skipped, even
+with --include-hidden.
 
 Options:
   -n, --dry-run         List folders and sizes only, delete nothing
@@ -84,7 +85,7 @@ echo "Searching for node_modules in $root ..."
 
 # Physical path of a directory (symlinks resolved), or nothing if it can't be entered
 physical() {
-    (cd "$1" 2>/dev/null && pwd -P)
+    (cd -- "$1" 2>/dev/null && pwd -P)
 }
 
 # -prune on node_modules stops find from descending into it, so nested ones are skipped.

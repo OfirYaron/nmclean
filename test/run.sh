@@ -93,7 +93,14 @@ lists     "No node_modules folders found."             "refuses the npm global f
 
 echo "# without npm on PATH"
 build
-out="$(PATH="/usr/bin:/bin" "$shell" "$nmclean" -n "$h" 2>&1 </dev/null)"
+# A PATH holding only the tools nmclean needs, so no npm can be found
+mkdir -p "$tmp/nonpm"
+for tool in find du awk rm basename cat; do
+    ln -s "$(command -v "$tool")" "$tmp/nonpm/$tool"
+done
+shell_path="$(command -v "$shell")"
+out="$(PATH="$tmp/nonpm" "$shell_path" "$nmclean" -n "$h" 2>&1 </dev/null)"
+lists     "Found 3 folders"                            "lists all 3 folders"
 lists     "$h/npm-prefix/lib/node_modules"             "works without npm (no global to protect)"
 
 echo "# -y deletes only what was listed"
